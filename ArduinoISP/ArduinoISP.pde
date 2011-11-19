@@ -1,9 +1,15 @@
+// ArduinoISP version 04m2
+// Copyright (c) 2008-2011 Randall Bohn
+// If you require a license, see 
+//     http://www.opensource.org/licenses/bsd-license.php
+//
 // this sketch turns the Arduino into a AVRISP
 // using the following pins:
 // 10: slave reset
 // 11: MOSI
 // 12: MISO
 // 13: SCK
+// (This is standard Arduino. Mega and others use different pins.)
 
 // Put an LED (with resistor) on the following pins:
 // 9: Heartbeat - shows the programmer is running
