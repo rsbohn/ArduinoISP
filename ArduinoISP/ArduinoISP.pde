@@ -10,6 +10,14 @@
 // 8: Error - Lights up if something goes wrong (use red if that makes sense)
 // 7: Programming - In communication with the slave
 //
+// October 2010 by Randall Bohn
+// - Write to EEPROM > 256 bytes
+// - Better use of LEDs:
+// -- Flash LED_PMODE on each flash commit
+// -- Flash LED_PMODE while writing EEPROM (both give visual feedback of writing progress)
+// - Light LED_ERR whenever we hit a STK_NOSYNC. Turn it off when back in sync.
+// - Use pins_arduino.h (should also work on Arduino Mega)
+//
 // October 2009 by David A. Mellis
 // - Added support for the read signature command
 // 
@@ -24,12 +32,13 @@
 // - The SPI functions herein were developed for the AVR910_ARD programmer 
 // - More information at http://code.google.com/p/mega-isp
 
-#include "pins_arduino.h"  // defines SS,MOSI,MISO,SCK
+#include "pins_arduino.h"
 #define RESET SS
 
 #define LED_HB 9
 #define LED_ERR 8
 #define LED_PMODE 7
+#define PROG_FLICKER true
 
 #define HWVER 2
 #define SWMAJ 1
@@ -47,12 +56,12 @@ void pulse(int pin, int times);
 
 void setup() {
   Serial.begin(19200);
-  pinMode(7, OUTPUT);
-  pulse(7, 2);
-  pinMode(8, OUTPUT);
-  pulse(8, 2);
-  pinMode(9, OUTPUT);
-  pulse(9, 2);
+  pinMode(LED_PMODE, OUTPUT);
+  pulse(LED_PMODE, 2);
+  pinMode(LED_ERR, OUTPUT);
+  pulse(LED_ERR, 2);
+  pinMode(LED_HB, OUTPUT);
+  pulse(LED_HB, 2);
 }
 
 int error=0;
@@ -112,9 +121,9 @@ uint8_t getch() {
   while(!Serial.available());
   return Serial.read();
 }
-void readbytes(int n) {
+void fill(int n) {
   for (int x = 0; x < n; x++) {
-    buff[x] = Serial.read();
+    buff[x] = getch();
   }
 }
 
@@ -127,6 +136,11 @@ void pulse(int pin, int times) {
     delay(PTIME);
   } 
   while (times--);
+}
+
+void prog_lamp(int state) {
+  if (PROG_FLICKER)
+    digitalWrite(LED_PMODE, state);
 }
 
 void spi_init() {
@@ -163,8 +177,8 @@ void empty_reply() {
   if (CRC_EOP == getch()) {
     Serial.print((char)STK_INSYNC);
     Serial.print((char)STK_OK);
-  } 
-  else {
+  } else {
+    error++;
     Serial.print((char)STK_NOSYNC);
   }
 }
@@ -176,6 +190,7 @@ void breply(uint8_t b) {
     Serial.print((char)STK_OK);
   } 
   else {
+    error++;
     Serial.print((char)STK_NOSYNC);
   }
 }
@@ -211,9 +226,6 @@ void set_parameters() {
   param.fusebytes = buff[7];
   param.flashpoll = buff[8]; 
   // ignore buff[9] (= buff[8])
-  //getch(); // discard second value
-  
-  // WARNING: not sure about the byte order of the following
   // following are 16 bits (big endian)
   param.eeprompoll = beget16(&buff[10]);
   param.pagesize = beget16(&buff[12]);
@@ -255,9 +267,7 @@ void universal() {
   int w;
   uint8_t ch;
 
-  for (w = 0; w < 4; w++) {
-    buff[w] = getch();
-  }
+  fill(4);
   ch = spi_transaction(buff[0], buff[1], buff[2], buff[3]);
   breply(ch);
 }
@@ -269,7 +279,12 @@ void flash(uint8_t hilo, int addr, uint8_t data) {
   data);
 }
 void commit(int addr) {
+  if (PROG_FLICKER) prog_lamp(LOW);
   spi_transaction(0x4C, (addr >> 8) & 0xFF, addr & 0xFF, 0);
+  if (PROG_FLICKER) {
+    delay(PTIME);
+    prog_lamp(HIGH);
+  }
 }
 
 //#define _current_page(x) (here & 0xFFFFE0)
@@ -280,11 +295,22 @@ int current_page(int addr) {
   if (param.pagesize == 256) return here & 0xFFFFFF80;
   return here;
 }
-uint8_t write_flash(int length) {
-  if (param.pagesize < 1) return STK_FAILED;
-  //if (param.pagesize != 64) return STK_FAILED;
-  int page = current_page(here);
+
+
+void write_flash(int length) {
+  fill(length);
+  if (CRC_EOP == getch()) {
+    Serial.print((char) STK_INSYNC);
+    Serial.print((char) write_flash_pages(length));
+  } else {
+    error++;
+    Serial.print((char) STK_NOSYNC);
+  }
+}
+
+uint8_t write_flash_pages(int length) {
   int x = 0;
+  int page = current_page(here);
   while (x < length) {
     if (page != current_page(here)) {
       commit(page);
@@ -300,38 +326,62 @@ uint8_t write_flash(int length) {
   return STK_OK;
 }
 
+#define EECHUNK (32)
 uint8_t write_eeprom(int length) {
-  // here is a word address, so we use here*2
+  // here is a word address, get the byte address
+  int start = here * 2;
+  int remaining = length;
+  if (length > param.eepromsize) {
+    error++;
+    return STK_FAILED;
+  }
+  while (remaining > EECHUNK) {
+    write_eeprom_chunk(start, EECHUNK);
+    start += EECHUNK;
+    remaining -= EECHUNK;
+  }
+  write_eeprom_chunk(start, remaining);
+  return STK_OK;
+}
+// write (length) bytes, (start) is a byte address
+uint8_t write_eeprom_chunk(int start, int length) {
   // this writes byte-by-byte,
   // page writing may be faster (4 bytes at a time)
+  fill(length);
+  prog_lamp(LOW);
   for (int x = 0; x < length; x++) {
-    spi_transaction(0xC0, 0x00, here*2+x, buff[x]);
+    int addr = start+x;
+    spi_transaction(0xC0, (addr>>8) & 0xFF, addr & 0xFF, buff[x]);
     delay(45);
-  } 
+  }
+  prog_lamp(HIGH); 
   return STK_OK;
 }
 
 void program_page() {
   char result = (char) STK_FAILED;
   int length = 256 * getch() + getch();
-  if (length > 256) {
-      Serial.print((char) STK_FAILED);
-      return;
-  }
   char memtype = getch();
-  for (int x = 0; x < length; x++) {
-    buff[x] = getch();
+  // flash memory @here, (length) bytes
+  if (memtype == 'F') {
+    write_flash(length);
+    return;
   }
-  if (CRC_EOP == getch()) {
-    Serial.print((char) STK_INSYNC);
-    if (memtype == 'F') result = (char)write_flash(length);
-    if (memtype == 'E') result = (char)write_eeprom(length);
-    Serial.print(result);
-  } 
-  else {
-    Serial.print((char) STK_NOSYNC);
+  if (memtype == 'E') {
+    result = (char)write_eeprom(length);
+    if (CRC_EOP == getch()) {
+      Serial.print((char) STK_INSYNC);
+      Serial.print(result);
+    } else {
+      error++;
+      Serial.print((char) STK_NOSYNC);
+    }
+    return;
   }
+  Serial.print((char)STK_FAILED);
+  return;
 }
+
 uint8_t flash_read(uint8_t hilo, int addr) {
   return spi_transaction(0x20 + hilo * 8,
     (addr >> 8) & 0xFF,
@@ -352,8 +402,10 @@ char flash_read_page(int length) {
 
 char eeprom_read_page(int length) {
   // here again we have a word address
+  int start = here * 2;
   for (int x = 0; x < length; x++) {
-    uint8_t ee = spi_transaction(0xA0, 0x00, here*2+x, 0xFF);
+    int addr = start + x;
+    uint8_t ee = spi_transaction(0xA0, (addr >> 8) & 0xFF, addr & 0xFF, 0xFF);
     Serial.print((char) ee);
   }
   return STK_OK;
@@ -364,6 +416,7 @@ void read_page() {
   int length = 256 * getch() + getch();
   char memtype = getch();
   if (CRC_EOP != getch()) {
+    error++;
     Serial.print((char) STK_NOSYNC);
     return;
   }
@@ -376,6 +429,7 @@ void read_page() {
 
 void read_signature() {
   if (CRC_EOP != getch()) {
+    error++;
     Serial.print((char) STK_NOSYNC);
     return;
   }
@@ -399,6 +453,7 @@ int avrisp() {
   uint8_t ch = getch();
   switch (ch) {
   case '0': // signon
+    error = 0;
     empty_reply();
     break;
   case '1':
@@ -412,12 +467,12 @@ int avrisp() {
     get_version(getch());
     break;
   case 'B':
-    readbytes(20);
+    fill(20);
     set_parameters();
     empty_reply();
     break;
   case 'E': // extended parameters - ignore for now
-    readbytes(5);
+    fill(5);
     empty_reply();
     break;
 
@@ -425,7 +480,7 @@ int avrisp() {
     start_pmode();
     empty_reply();
     break;
-  case 'U':
+  case 'U': // set address (word)
     here = getch() + 256 * getch();
     empty_reply();
     break;
@@ -444,31 +499,33 @@ int avrisp() {
     program_page();
     break;
     
-  case 0x74: //STK_READ_PAGE
+  case 0x74: //STK_READ_PAGE 't'
     read_page();    
     break;
 
-  case 'V':
+  case 'V': //0x56
     universal();
     break;
-  case 'Q':
+  case 'Q': //0x51
     error=0;
     end_pmode();
     empty_reply();
     break;
     
-  case 0x75: //STK_READ_SIGN
+  case 0x75: //STK_READ_SIGN 'u'
     read_signature();
     break;
 
   // expecting a command, not CRC_EOP
   // this is how we can get back in sync
   case CRC_EOP:
+    error++;
     Serial.print((char) STK_NOSYNC);
     break;
     
   // anything else we will return STK_UNKNOWN
   default:
+    error++;
     if (CRC_EOP == getch()) 
       Serial.print((char)STK_UNKNOWN);
     else
