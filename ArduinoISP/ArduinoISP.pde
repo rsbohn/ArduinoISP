@@ -10,6 +10,10 @@
 // 8: Error - Lights up if something goes wrong (use red if that makes sense)
 // 7: Programming - In communication with the slave
 //
+// 23 July 2011 Randall Bohn
+// -Address Arduino issue 509 :: Portability of ArduinoISP
+// http://code.google.com/p/arduino/issues/detail?id=509
+//
 // October 2010 by Randall Bohn
 // - Write to EEPROM > 256 bytes
 // - Better use of LEDs:
@@ -360,7 +364,8 @@ uint8_t write_eeprom_chunk(int start, int length) {
 
 void program_page() {
   char result = (char) STK_FAILED;
-  int length = 256 * getch() + getch();
+  int length = 256 * getch();
+  length += getch();
   char memtype = getch();
   // flash memory @here, (length) bytes
   if (memtype == 'F') {
@@ -413,7 +418,8 @@ char eeprom_read_page(int length) {
 
 void read_page() {
   char result = (char)STK_FAILED;
-  int length = 256 * getch() + getch();
+  int length = 256 * getch();
+  length += getch();
   char memtype = getch();
   if (CRC_EOP != getch()) {
     error++;
@@ -481,7 +487,8 @@ int avrisp() {
     empty_reply();
     break;
   case 'U': // set address (word)
-    here = getch() + 256 * getch();
+    here = getch();
+    here += 256 * getch();
     empty_reply();
     break;
 
