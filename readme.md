@@ -12,4 +12,7 @@ That is an older version of avrdude (5.04, latest is 5.11).
 Please report issues on the [mega-isp](http://code.google.com/p/mega-isp)
 site at code.google.com.
 
+Also see the excellent [Arduino as AVR ISP](http://arduino.cc/en/Tutorial/ArduinoISP)
+tutorial on arduino.cc.
+
 
