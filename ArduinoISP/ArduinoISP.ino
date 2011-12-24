@@ -1,19 +1,20 @@
-// ArduinoISP version 04m2
+// ArduinoISP version 04m3
 // Copyright (c) 2008-2011 Randall Bohn
 // If you require a license, see 
 //     http://www.opensource.org/licenses/bsd-license.php
 //
-// this sketch turns the Arduino into a AVRISP
-// using the following pins:
-// 10: slave reset
-// 11: MOSI
-// 12: MISO
-// 13: SCK
-// (This is standard Arduino. Mega and others use different pins.)
-
+// This sketch turns the Arduino into a AVRISP
+// using the following arduino pins:
+//
+// pin name:    not-mega:         mega(1280 and 2560)
+// slave reset: 10:               53 
+// MOSI:        11:               51 
+// MISO:        12:               50 
+// SCK:         13:               52 
+//
 // Put an LED (with resistor) on the following pins:
-// 9: Heartbeat - shows the programmer is running
-// 8: Error - Lights up if something goes wrong (use red if that makes sense)
+// 9: Heartbeat   - shows the programmer is running
+// 8: Error       - Lights up if something goes wrong (use red if that makes sense)
 // 7: Programming - In communication with the slave
 //
 // 23 July 2011 Randall Bohn
@@ -43,10 +44,10 @@
 // - More information at http://code.google.com/p/mega-isp
 
 #include "pins_arduino.h"
-#define RESET SS
+#define RESET     SS
 
-#define LED_HB 9
-#define LED_ERR 8
+#define LED_HB    9
+#define LED_ERR   8
 #define LED_PMODE 7
 #define PROG_FLICKER true
 
@@ -55,12 +56,12 @@
 #define SWMIN 18
 
 // STK Definitions
-#define STK_OK 0x10
-#define STK_FAILED 0x11
+#define STK_OK      0x10
+#define STK_FAILED  0x11
 #define STK_UNKNOWN 0x12
-#define STK_INSYNC 0x14
-#define STK_NOSYNC 0x15
-#define CRC_EOP 0x20 //ok it is a space...
+#define STK_INSYNC  0x14
+#define STK_NOSYNC  0x15
+#define CRC_EOP     0x20 //ok it is a space...
 
 void pulse(int pin, int times);
 
@@ -110,7 +111,7 @@ void heartbeat() {
   analogWrite(LED_HB, hbval);
   delay(40);
 }
-  
+
 
 void loop(void) {
   // is pmode active?
@@ -119,7 +120,7 @@ void loop(void) {
   // is there an error?
   if (error) digitalWrite(LED_ERR, HIGH); 
   else digitalWrite(LED_ERR, LOW);
-  
+
   // light the heartbeat LED
   heartbeat();
   if (Serial.available()) {
@@ -187,7 +188,8 @@ void empty_reply() {
   if (CRC_EOP == getch()) {
     Serial.print((char)STK_INSYNC);
     Serial.print((char)STK_OK);
-  } else {
+  } 
+  else {
     error++;
     Serial.print((char)STK_NOSYNC);
   }
@@ -227,18 +229,18 @@ void get_version(uint8_t c) {
 void set_parameters() {
   // call this after reading paramter packet into buff[]
   param.devicecode = buff[0];
-  param.revision = buff[1];
-  param.progtype = buff[2];
-  param.parmode = buff[3];
-  param.polling = buff[4];
-  param.selftimed = buff[5];
-  param.lockbytes = buff[6];
-  param.fusebytes = buff[7];
-  param.flashpoll = buff[8]; 
+  param.revision   = buff[1];
+  param.progtype   = buff[2];
+  param.parmode    = buff[3];
+  param.polling    = buff[4];
+  param.selftimed  = buff[5];
+  param.lockbytes  = buff[6];
+  param.fusebytes  = buff[7];
+  param.flashpoll  = buff[8]; 
   // ignore buff[9] (= buff[8])
   // following are 16 bits (big endian)
   param.eeprompoll = beget16(&buff[10]);
-  param.pagesize = beget16(&buff[12]);
+  param.pagesize   = beget16(&buff[12]);
   param.eepromsize = beget16(&buff[14]);
 
   // 32 bits flashsize (big endian)
@@ -299,8 +301,8 @@ void commit(int addr) {
 
 //#define _current_page(x) (here & 0xFFFFE0)
 int current_page(int addr) {
-  if (param.pagesize == 32) return here & 0xFFFFFFF0;
-  if (param.pagesize == 64) return here & 0xFFFFFFE0;
+  if (param.pagesize == 32)  return here & 0xFFFFFFF0;
+  if (param.pagesize == 64)  return here & 0xFFFFFFE0;
   if (param.pagesize == 128) return here & 0xFFFFFFC0;
   if (param.pagesize == 256) return here & 0xFFFFFF80;
   return here;
@@ -312,7 +314,8 @@ void write_flash(int length) {
   if (CRC_EOP == getch()) {
     Serial.print((char) STK_INSYNC);
     Serial.print((char) write_flash_pages(length));
-  } else {
+  } 
+  else {
     error++;
     Serial.print((char) STK_NOSYNC);
   }
@@ -383,7 +386,8 @@ void program_page() {
     if (CRC_EOP == getch()) {
       Serial.print((char) STK_INSYNC);
       Serial.print(result);
-    } else {
+    } 
+    else {
       error++;
       Serial.print((char) STK_NOSYNC);
     }
@@ -395,9 +399,9 @@ void program_page() {
 
 uint8_t flash_read(uint8_t hilo, int addr) {
   return spi_transaction(0x20 + hilo * 8,
-    (addr >> 8) & 0xFF,
-    addr & 0xFF,
-    0);
+  (addr >> 8) & 0xFF,
+  addr & 0xFF,
+  0);
 }
 
 char flash_read_page(int length) {
@@ -511,7 +515,7 @@ int avrisp() {
   case 0x64: //STK_PROG_PAGE
     program_page();
     break;
-    
+
   case 0x74: //STK_READ_PAGE 't'
     read_page();    
     break;
@@ -524,19 +528,19 @@ int avrisp() {
     end_pmode();
     empty_reply();
     break;
-    
+
   case 0x75: //STK_READ_SIGN 'u'
     read_signature();
     break;
 
-  // expecting a command, not CRC_EOP
-  // this is how we can get back in sync
+    // expecting a command, not CRC_EOP
+    // this is how we can get back in sync
   case CRC_EOP:
     error++;
     Serial.print((char) STK_NOSYNC);
     break;
-    
-  // anything else we will return STK_UNKNOWN
+
+    // anything else we will return STK_UNKNOWN
   default:
     error++;
     if (CRC_EOP == getch()) 
@@ -545,4 +549,6 @@ int avrisp() {
       Serial.print((char)STK_NOSYNC);
   }
 }
+
+
 
