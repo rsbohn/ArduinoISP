@@ -44,7 +44,10 @@
 // - More information at http://code.google.com/p/mega-isp
 
 #include "pins_arduino.h"
-#define RESET     SS
+#define PIN_RESET     SS
+#define PIN_SCK       SCK
+#define PIN_MOSI      MOSI
+#define PIN_MISO      MISO
 
 #define LED_HB    9
 #define LED_ERR   8
@@ -54,6 +57,22 @@
 #define HWVER 2
 #define SWMAJ 1
 #define SWMIN 18
+
+#define BAUDRATE 19200
+//#define BAUDRATE 115200
+// comment USE_SPI to use bitbang (digitalWrite())
+//#define USE_SPI
+
+#ifdef USE_SPI
+// normal settings
+#define RESETDELAY 0
+#define SPICR 0x53
+#define SPISR (SPSR & 0xfe)
+#else // USE_SPI
+// bitbang to make it work with very slow attiny2313
+#define RESETDELAY 0
+
+#endif
 
 // STK Definitions
 #define STK_OK      0x10
@@ -66,7 +85,7 @@
 void pulse(int pin, int times);
 
 void setup() {
-  Serial.begin(19200);
+  Serial.begin(BAUDRATE);
   pinMode(LED_PMODE, OUTPUT);
   pulse(LED_PMODE, 2);
   pinMode(LED_ERR, OUTPUT);
@@ -154,9 +173,14 @@ void prog_lamp(int state) {
     digitalWrite(LED_PMODE, state);
 }
 
+
+#ifdef USE_SPI
 void spi_init() {
   uint8_t x;
-  SPCR = 0x53;
+  SPCR = SPICR;
+#ifdef SPISR
+  SPSR = SPISR;
+#endif
   x=SPSR;
   x=SPDR;
 }
@@ -175,14 +199,32 @@ uint8_t spi_send(uint8_t b) {
   return reply;
 }
 
+#else // USE_SPI
+
+void spi_init() {
+}
+
+uint8_t spi_send(uint8_t b) {
+  byte r = 0;
+  for (byte i = 0; i < 8; ++i, b<<=1) {
+    digitalWrite(PIN_MOSI, b & 0x80);
+    digitalWrite(PIN_SCK, LOW); // slow pulse
+    digitalWrite(PIN_SCK, HIGH);
+    r = (r << 1) | digitalRead(PIN_MISO);
+  }
+  digitalWrite(PIN_SCK, LOW); // slow pulse
+  return r;
+}
+
+#endif // USE_SPI
+
 uint8_t spi_transaction(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
-  uint8_t n;
   spi_send(a); 
-  n=spi_send(b);
-  //if (n != a) error = -1;
-  n=spi_send(c);
+  spi_send(b);
+  spi_send(c);
   return spi_send(d);
 }
+
 
 void empty_reply() {
   if (CRC_EOP == getch()) {
@@ -253,25 +295,30 @@ void set_parameters() {
 
 void start_pmode() {
   spi_init();
+  
+  digitalWrite(PIN_RESET, HIGH);
+  digitalWrite(PIN_SCK, LOW);
+  digitalWrite(PIN_MOSI, HIGH);
+  
+  pinMode(PIN_MISO, INPUT);
+  pinMode(PIN_RESET, OUTPUT);
+  pinMode(PIN_SCK, OUTPUT);
+  pinMode(PIN_MOSI, OUTPUT);
+  
   // following delays may not work on all targets...
-  pinMode(RESET, OUTPUT);
-  digitalWrite(RESET, HIGH);
-  pinMode(SCK, OUTPUT);
-  digitalWrite(SCK, LOW);
+  delay(50);  
+  digitalWrite(PIN_RESET, LOW);
   delay(50);
-  digitalWrite(RESET, LOW);
-  delay(50);
-  pinMode(MISO, INPUT);
-  pinMode(MOSI, OUTPUT);
+  
+  if (RESETDELAY) delay(RESETDELAY);
   spi_transaction(0xAC, 0x53, 0x00, 0x00);
   pmode = 1;
 }
 
 void end_pmode() {
-  pinMode(MISO, INPUT);
-  pinMode(MOSI, INPUT);
-  pinMode(SCK, INPUT);
-  pinMode(RESET, INPUT);
+  pinMode(PIN_MOSI, INPUT);
+  pinMode(PIN_SCK, INPUT);
+  pinMode(PIN_RESET, INPUT);
   pmode = 0;
 }
 
