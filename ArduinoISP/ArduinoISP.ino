@@ -10,7 +10,7 @@
 // slave reset: 10:               53 
 // MOSI:        11:               51 
 // MISO:        12:               50 
-// SCK:         13:               52 
+// SCK:         13: (std LED)     52
 //
 // Put an LED (with resistor) on the following pins:
 // 9: Heartbeat   - shows the programmer is running
@@ -62,6 +62,16 @@
 //#define BAUDRATE 115200
 // comment USE_SPI to use bitbang (digitalWrite())
 //#define USE_SPI
+// create clock on digital 9 using pwm (timer1), LED_HB must move
+#define LADYADA_CLOCK
+
+#ifdef LADYADA_CLOCK
+// needs timer1 PWM
+#define CLOCK_PIN 9
+#undef  LED_HB
+#define LED_HB    6
+#endif
+
 
 #ifdef USE_SPI
 // normal settings
@@ -91,6 +101,17 @@ void setup() {
   pinMode(LED_ERR, OUTPUT);
   pulse(LED_ERR, 2);
   pinMode(LED_HB, OUTPUT);
+
+#ifdef LADYADA_CLOCK
+  // setup high freq PWM (timer 1)
+  pinMode(CLOCK_PIN, OUTPUT);
+  // 50% duty cycle -> 8 MHz
+  OCR1A = 0;
+  ICR1 = 1;
+  // OC1A output, fast PWM
+  TCCR1A = _BV(WGM11) | _BV(COM1A1);
+  TCCR1B = _BV(WGM13) | _BV(WGM12) | _BV(CS10); // no clock prescale
+#endif
   pulse(LED_HB, 2);
 }
 
