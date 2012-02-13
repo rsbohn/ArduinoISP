@@ -229,16 +229,10 @@ void spi_init(void) {
   x=SPDR;
 }
 
-inline void spi_wait(void) {
-  while (!(SPSR & (1 << SPIF)));
-}
-
 uint8_t spi_send(uint8_t b) {
-  uint8_t reply;
   SPDR=b;
-  spi_wait();
-  reply = SPDR;
-  return reply;
+  while (!(SPSR & (1 << SPIF)));
+  return SPDR;
 }
 
 #else // no USE_SPI
@@ -247,15 +241,13 @@ inline void spi_init(void) {
 }
 
 uint8_t spi_send(uint8_t b) {
-  byte r = 0;
-  for (byte i = 0; i < 8; ++i, b<<=1) {
+  for (uint8_t i = 0; i < 8; ++i) {
     digitalWrite(PIN_MOSI, b & 0x80);
-    digitalWrite(PIN_SCK, LOW); // slow pulse
     digitalWrite(PIN_SCK, HIGH);
-    r = (r << 1) | digitalRead(PIN_MISO);
+    b = (b << 1) | digitalRead(PIN_MISO);
+    digitalWrite(PIN_SCK, LOW); // slow pulse
   }
-  digitalWrite(PIN_SCK, LOW); // slow pulse
-  return r;
+  return b;
 }
 
 #endif // USE_SPI
