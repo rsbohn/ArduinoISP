@@ -123,12 +123,15 @@ void setup(void) {
 #ifdef LADYADA_CLOCK
   // setup high freq PWM (timer 1)
   pinMode(CLOCK_PIN, OUTPUT);
+  uint8_t sreg = SREG;
+  cli(); // disable interrupts to access TCNT1, OCR1A,B
   // 50% duty cycle -> 8 MHz
   OCR1A = 0;
   ICR1 = 1;
   // OC1A output, fast PWM
   TCCR1A = _BV(WGM11) | _BV(COM1A1);
   TCCR1B = _BV(WGM13) | _BV(WGM12) | _BV(CS10); // no clock prescale
+  SREG = sreg; // restore interrupts
 #endif
 }
 
