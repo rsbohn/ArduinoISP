@@ -71,7 +71,15 @@
 
 #ifdef USE_SPI
 #include "SPI.h"
+
+#ifdef __AVR__  // this would better go into SPI lib
+#define SPI_CLOCK_DIV_MAX  SPI_CLOCK_DIV128
+#else
+#define SPI_CLOCK_DIV_MAX  255
 #endif
+
+#endif
+
 #include "pins_arduino.h"
 #define PIN_RESET     SS
 #define PIN_SCK       SCK
@@ -86,6 +94,9 @@
 
 
 #ifdef LADYADA_CLOCK
+#ifndef __AVR__
+#error "Not yet implemented for non AVR's."
+#endif
 // needs timer1 PWM
 #define CLOCK_PIN 9
 #undef  LED_HB
@@ -140,7 +151,7 @@ void setup(void) {
   SPI.setDataMode(0);
   SPI.setBitOrder(MSBFIRST);
   // Clock Div can be 2,4,8,16,32,64, or 128
-  SPI.setClockDivider(SPI_CLOCK_DIV128);  
+  SPI.setClockDivider(SPI_CLOCK_DIV_MAX);  
 #endif
 
   pinMode(LED_PMODE, OUTPUT);
