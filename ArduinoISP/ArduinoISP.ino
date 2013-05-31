@@ -55,12 +55,13 @@
 //#define BAUDRATE 115200
 
 // comment USE_SPI to use bitbang (digitalWrite())
-//#define USE_SPI
+// use bitbang to make it work with very slow attiny2313
+#define USE_SPI
 
 // create clock on digital 9 using pwm (timer1), LED_HB must move
 //#define LADYADA_CLOCK
 
-
+#define RESETDELAY 0
 
 ///////////////////////////////////////////////
 //   ideally won't need to edit below here   //
@@ -89,17 +90,6 @@
 #define CLOCK_PIN 9
 #undef  LED_HB
 #define LED_HB    6
-#endif
-
-
-#ifdef USE_SPI
-// normal settings
-#define RESETDELAY 0
-#define SPICR      0x53
-#define SPISR (SPSR & 0xfe)
-#else // USE_SPI
-// bitbang to make it work with very slow attiny2313
-#define RESETDELAY 0
 #endif
 
 
