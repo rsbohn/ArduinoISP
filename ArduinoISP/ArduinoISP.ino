@@ -58,7 +58,7 @@
 //#define USE_SPI
 
 // create clock on digital 9 using pwm (timer1), LED_HB must move
-#define LADYADA_CLOCK
+//#define LADYADA_CLOCK
 
 
 
@@ -68,7 +68,9 @@
 
 
 
+#ifdef USE_SPI
 #include "SPI.h"
+#endif
 #include "pins_arduino.h"
 #define PIN_RESET     SS
 #define PIN_SCK       SCK
@@ -112,14 +114,45 @@
 
 void pulse(uint8_t pin, uint8_t times);
 
+#ifndef USE_SPI
+
+class BitBangedSPI {
+public:
+
+  void begin() {
+    pinMode(PIN_MISO, INPUT);
+    pinMode(PIN_RESET, OUTPUT);
+    pinMode(PIN_SCK, OUTPUT);
+    pinMode(PIN_MOSI, OUTPUT);
+  }
+
+  void end() {}
+ 
+  uint8_t transfer (uint8_t b) {
+    for (unsigned int i = 0; i < 8; ++i) {
+      digitalWrite(PIN_MOSI, b & 0x80);
+      digitalWrite(PIN_SCK, HIGH);
+      b = (b << 1) | digitalRead(PIN_MISO);
+      digitalWrite(PIN_SCK, LOW); // slow pulse
+    }
+    return b;
+  }
+};
+
+static BitBangedSPI SPI;
+
+#endif
+
 void setup(void) {
   Serial.begin(BAUDRATE);
   
+#ifdef USE_SPI
   SPI.setDataMode(0);
   SPI.setBitOrder(MSBFIRST);
   // Clock Div can be 2,4,8,16,32,64, or 128
   SPI.setClockDivider(SPI_CLOCK_DIV128);  
-  
+#endif
+
   pinMode(LED_PMODE, OUTPUT);
   pulse(LED_PMODE, 2);
   pinMode(LED_ERR, OUTPUT);
@@ -227,22 +260,6 @@ void prog_lamp(uint8_t state) {
     digitalWrite(LED_PMODE, state);
 }
 
-#ifdef USE_SPI
-
-#else // no USE_SPI
-
-uint8_t spi_send(uint8_t b) {
-  for (uint8_t i = 0; i < 8; ++i) {
-    digitalWrite(PIN_MOSI, b & 0x80);
-    digitalWrite(PIN_SCK, HIGH);
-    b = (b << 1) | digitalRead(PIN_MISO);
-    digitalWrite(PIN_SCK, LOW); // slow pulse
-  }
-  return b;
-}
-
-#endif // USE_SPI
-
 uint8_t spi_transaction(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
   SPI.transfer(a);
   SPI.transfer(b);
@@ -321,8 +338,8 @@ void start_pmode(void) {
   digitalWrite(PIN_MOSI, HIGH);
 
   pinMode(PIN_MISO, INPUT);
-  SPI.begin(); // now SS, MOSI and SCK are output
   pinMode(PIN_RESET, OUTPUT);
+  SPI.begin(); // now SS, MOSI and SCK are output
 
   // following delays may not work on all targets...
   delay(50);
