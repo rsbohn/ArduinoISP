@@ -68,6 +68,7 @@
 
 
 
+#include "SPI.h"
 #include "pins_arduino.h"
 #define PIN_RESET     SS
 #define PIN_SCK       SCK
@@ -113,6 +114,12 @@ void pulse(uint8_t pin, uint8_t times);
 
 void setup(void) {
   Serial.begin(BAUDRATE);
+  
+  SPI.setDataMode(0);
+  SPI.setBitOrder(MSBFIRST);
+  // Clock Div can be 2,4,8,16,32,64, or 128
+  SPI.setClockDivider(SPI_CLOCK_DIV128);  
+  
   pinMode(LED_PMODE, OUTPUT);
   pulse(LED_PMODE, 2);
   pinMode(LED_ERR, OUTPUT);
@@ -220,28 +227,9 @@ void prog_lamp(uint8_t state) {
     digitalWrite(LED_PMODE, state);
 }
 
-
 #ifdef USE_SPI
-void spi_init(void) {
-  uint8_t x;
-  SPCR = SPICR;
-#ifdef SPISR
-  SPSR = SPISR;
-#endif
-  x=SPSR;
-  x=SPDR;
-}
-
-uint8_t spi_send(uint8_t b) {
-  SPDR=b;
-  while (!(SPSR & (1 << SPIF)));
-  return SPDR;
-}
 
 #else // no USE_SPI
-
-inline void spi_init(void) {
-}
 
 uint8_t spi_send(uint8_t b) {
   for (uint8_t i = 0; i < 8; ++i) {
@@ -256,10 +244,10 @@ uint8_t spi_send(uint8_t b) {
 #endif // USE_SPI
 
 uint8_t spi_transaction(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
-  spi_send(a);
-  spi_send(b);
-  spi_send(c);
-  return spi_send(d);
+  SPI.transfer(a);
+  SPI.transfer(b);
+  SPI.transfer(c);
+  return SPI.transfer(d);
 }
 
 
@@ -327,16 +315,14 @@ void set_parameters(void) {
 
 void start_pmode(void) {
   pmode = 1;
-  spi_init();
 
   digitalWrite(PIN_RESET, HIGH);
   digitalWrite(PIN_SCK, LOW);
   digitalWrite(PIN_MOSI, HIGH);
 
   pinMode(PIN_MISO, INPUT);
+  SPI.begin(); // now SS, MOSI and SCK are output
   pinMode(PIN_RESET, OUTPUT);
-  pinMode(PIN_SCK, OUTPUT);
-  pinMode(PIN_MOSI, OUTPUT);
 
   // following delays may not work on all targets...
   delay(50);
@@ -348,6 +334,7 @@ void start_pmode(void) {
 }
 
 void end_pmode(void) {
+  SPI.end();
   pinMode(PIN_MOSI, INPUT);
   pinMode(PIN_SCK, INPUT);
   pinMode(PIN_RESET, INPUT);
