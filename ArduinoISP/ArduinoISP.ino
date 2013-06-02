@@ -334,19 +334,22 @@ void set_parameters(void) {
 void start_pmode(void) {
   pmode = 1;
 
-  digitalWrite(PIN_RESET, HIGH);
+  // reset target before driving SCK or MOSI
+  digitalWrite(PIN_RESET, LOW);
   digitalWrite(PIN_SCK, LOW);
   digitalWrite(PIN_MOSI, HIGH);
 
   pinMode(PIN_MISO, INPUT);
-  pinMode(PIN_RESET, OUTPUT);
+  pinMode(PIN_RESET, OUTPUT); // PIN_RESET not always SS: Leonardo, Due...
   SPI.begin(); // now SS, MOSI and SCK are output
 
-  // following delays may not work on all targets...
-  delay(50);
+  // See datasheets: "Serial Programming Algorithm":
+  delay(5); // choosen arbitrarilly
+  // pulse RESET high after SCK is low
+  digitalWrite(PIN_RESET, HIGH);
+  delay(1); // must be minimum 2 CPU clock cycles
   digitalWrite(PIN_RESET, LOW);
-  delay(50);
-
+  delay(50); // minimum 20 ms
   if (RESETDELAY) delay(RESETDELAY);
   spi_transaction(0xAC, 0x53, 0x00, 0x00);
 }
