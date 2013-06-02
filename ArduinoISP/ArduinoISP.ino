@@ -63,14 +63,21 @@
 
 #define RESETDELAY 0
 
+// uncomment if you want to have debug traces
+// (needs a separate uart so works only on Sanguino, Leonardo, Due...)
+//#define TRACES
 
 #ifdef __SAM3X8E__
 
+// Select uart to use for programming and debugging:
 #define SERIAL_PRG SerialUSB
+#define SERIAL_DBG Serial
 
 #else
 
+// Select uart to use for programming and debugging:
 #define SERIAL_PRG Serial
+#define SERIAL_DBG Serial1
 
 #endif
 
@@ -114,6 +121,19 @@
 #define LED_HB    6
 #endif
 
+#ifdef TRACES
+#define TRACE_BEGIN(baud) SERIAL_DBG.begin(baud)
+#define TRACE(x) SERIAL_DBG.print(x)
+#define TRACELN(x) SERIAL_DBG.println(x)
+#define TRACE2(x, format) SERIAL_DBG.print(x, format)
+#define TRACE2LN(x, format) SERIAL_DBG.println(x, format)
+#else
+#define TRACE_BEGIN(baud)
+#define TRACE(x)
+#define TRACELN(x)
+#define TRACE2(x, format)
+#define TRACE2LN(x, format)
+#endif
 
 
 // STK Definitions
@@ -185,6 +205,9 @@ void setup(void) {
   TCCR1B = _BV(WGM13) | _BV(WGM12) | _BV(CS10); // no clock prescale
   SREG = sreg; // restore interrupts
 #endif
+  
+  TRACE_BEGIN(115200);
+  TRACELN("*** setup ***");  
 }
 
 uint8_t error=0;
@@ -554,6 +577,8 @@ void read_signature(void) {
 void avrisp(void) {
   uint8_t data, low, high;
   uint8_t ch = getch();
+  TRACE("> ");  
+  TRACELN((char) ch);
   switch (ch) {
   case '0': // signon
     error = 0;
