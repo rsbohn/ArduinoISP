@@ -54,10 +54,6 @@
 //#define BAUDRATE 38400
 //#define BAUDRATE 115200
 
-// comment USE_SPI to use bitbang (digitalWrite())
-// use bitbang to make it work with very slow attiny2313
-#define USE_SPI
-
 // create clock on digital 9 using pwm (timer1), LED_HB must move
 //#define LADYADA_CLOCK
 
@@ -67,17 +63,27 @@
 // (needs a separate uart so works only on Sanguino, Leonardo, Due...)
 //#define TRACES
 
+// following settings have different defaults on SAM vs. AVR
+
 #ifdef __SAM3X8E__
 
 // Select uart to use for programming and debugging:
 #define SERIAL_PRG SerialUSB
 #define SERIAL_DBG Serial
 
+// comment USE_HARDWARE_SPI to use bitbang spi 
+// use bitbang to make it work with very slow attiny2313
+// #define USE_HARDWARE_SPI
+
 #else
 
 // Select uart to use for programming and debugging:
 #define SERIAL_PRG Serial
 #define SERIAL_DBG Serial1
+
+// comment USE_HARDWARE_SPI to use bitbang spi
+// use bitbang to make it work with very slow attiny2313
+#define USE_HARDWARE_SPI
 
 #endif
 
@@ -87,7 +93,7 @@
 
 
 
-#ifdef USE_SPI
+#ifdef USE_HARDWARE_SPI
 #include "SPI.h"
 
 #ifdef __AVR__  // this would better go into SPI lib
@@ -146,7 +152,7 @@
 
 void pulse(uint8_t pin, uint8_t times);
 
-#ifndef USE_SPI
+#ifndef USE_HARDWARE_SPI
 
 class BitBangedSPI {
 public:
@@ -178,7 +184,7 @@ static BitBangedSPI SPI;
 void setup(void) {
   SERIAL_PRG.begin(BAUDRATE);
   
-#ifdef USE_SPI
+#ifdef USE_HARDWARE_SPI
   SPI.setDataMode(0);
   SPI.setBitOrder(MSBFIRST);
   // Clock Div can be 2,4,8,16,32,64, or 128
